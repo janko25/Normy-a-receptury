@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Normy a receptury</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 2em; max-width: 800px; }
+    h1, h2 { color: #333; }
+    input, textarea, select, button { width: 100%; padding: 0.5em; margin-top: 0.3em; }
+    .recept { border: 1px solid #ccc; padding: 1em; margin-bottom: 1em; }
+    .filter, .actions { margin-bottom: 2em; }
+    .code { font-weight: bold; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Normy a receptury</h1>
+
+  <div class="filter">
+    <input type="text" id="search" placeholder="Hledat podle názvu..." oninput="zobrazRecepty()">
+    <select id="filterKategorie" onchange="zobrazRecepty()">
+      <option value="">Všechny kategorie</option>
+      <option value="Polévka">Polévka</option>
+      <option value="Hlavní jídlo">Hlavní jídlo</option>
+      <option value="Vegetariánské">Vegetariánské</option>
+      <option value="Burger">Burger</option>
+      <option value="Speciál">Speciál</option>
+    </select>
+  </div>
+
+  <div id="recepty"></div>
+
+  <h2>Přidat nový recept</h2>
+  <form id="form">
+    <label>Název receptu: <input type="text" id="nazev" required></label><br>
+    <label>Kategorie:
+      <select id="kategorie">
+        <option value="Polévka">Polévka</option>
+        <option value="Hlavní jídlo">Hlavní jídlo</option>
+        <option value="Vegetariánské">Vegetariánské</option>
+        <option value="Burger">Burger</option>
+        <option value="Speciál">Speciál</option>
+      </select>
+    </label><br>
+    <label>Alergeny: <input type="text" id="alergeny"></label><br>
+    <label>Ingredience (každá na nový řádek): <textarea id="ingredience"></textarea></label><br>
+    <label>Postup (každý krok na nový řádek): <textarea id="postup"></textarea></label><br>
+    <button type="submit">Uložit recept</button>
+  </form>
+
+  <script>
+    let recepty = JSON.parse(localStorage.getItem("recepty")) || [];
+
+    const prefixy = {"Polévka":"P","Hlavní jídlo":"H","Vegetariánské":"V","Burger":"B","Speciál":"S"};
+
+    function generujKod(kategorie) {
+      const prefix = prefixy[kategorie] || "X";
+      const existujici = recepty.filter(r => r.kod && r.kod.startsWith(prefix));
+      const cisla = existujici.map(r => parseInt(r.kod.split("-")[1])).filter(n => !isNaN(n));
+      const maxCislo = cisla.length ? Math.max(...cisla) : 0;
+      return `${prefix}-${(maxCislo + 1).toString().padStart(3, '0')}`;
+    }
+
+    document.getElementById("form").onsubmit = function(e) {
+      e.preventDefault();
+      const kategorie = document.getElementById("kategorie").value;
+      const recept = {
+        kod: generujKod(kategorie),
+        nazev: document.getElementById("nazev").value,
+        kategorie: kategorie,
+        alergeny: document.getElementById("alergeny").value,
+        ingredience: document.getElementById("ingredience").value.split("\n"),
+        postup: document.getElementById("postup").value.split("\n")
+      };
+      recepty.push(recept);
+      localStorage.setItem("recepty", JSON.stringify(recepty));
+      document.getElementById("form").reset();
+      zobrazRecepty();
+    };
+
+    function zobrazRecepty() {
+      const hledani = document.getElementById("search").value.toLowerCase();
+      const filtrKat = document.getElementById("filterKategorie").value;
+      const container = document.getElementById("recepty");
+      container.innerHTML = "";
+      recepty.filter(r => r.nazev.toLowerCase().includes(hledani) && (filtrKat === "" || r.kategorie === filtrKat)).forEach((r,i)=>{
+        container.innerHTML += `<div class="recept">
+          <span class="code">${r.kod}</span>
+          <h3>${r.nazev}</h3>
+          <p><strong>Kategorie:</strong> ${r.kategorie}</p>
+          <p><strong>Alergeny:</strong> ${r.alergeny}</p>
+          <h4>Ingredience:</h4><ul>${r.ingredience.map(i=>`<li>${i}</li>`).join("")}</ul>
+          <h4>Postup:</h4><ol>${r.postup.map(p=>`<li>${p}</li>`).join("")}</ol>
+          <button onclick="exportPDF('${r.kod}')">PDF</button>
+        </div>`;
+      });
+    }
+
+    window.onload=zobrazRecepty;
+  </script>
+</body>
+</html>
