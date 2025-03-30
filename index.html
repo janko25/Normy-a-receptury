@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Normy a receptury</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js"></script>
   <style>
     body { font-family: sans-serif; margin: 2em; max-width: 800px; }
     h1, h2 { color: #333; }
@@ -49,54 +50,69 @@
   </form>
 
   <script>
-    let recepty = JSON.parse(localStorage.getItem("recepty")) || [];
+    const firebaseConfig = {
+      apiKey: "AIzaSyC-YCAk9yDZAFBRqSMWSMwz8sO-rUHGVz4",
+      authDomain: "receptury-71fd3.firebaseapp.com",
+      projectId: "receptury-71fd3",
+      storageBucket: "receptury-71fd3.firebasestorage.app",
+      messagingSenderId: "942683561211",
+      appId: "1:942683561211:web:c534962b6031d8f6daa45e",
+      measurementId: "G-XP1R0MJBE5"
+    };
 
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const receptyRef = db.collection("recepty");
     const prefixy = {"Polévka":"P","Hlavní jídlo":"H","Vegetariánské":"V","Burger":"B","Speciál":"S"};
 
-    function generujKod(kategorie) {
+    async function generujKod(kategorie) {
       const prefix = prefixy[kategorie] || "X";
-      const existujici = recepty.filter(r => r.kod && r.kod.startsWith(prefix));
-      const cisla = existujici.map(r => parseInt(r.kod.split("-")[1])).filter(n => !isNaN(n));
+      const snapshot = await receptyRef.where("kod", ">=", prefix + "-").where("kod", "<=", prefix + "-zzz").get();
+      const cisla = snapshot.docs.map(doc => parseInt(doc.data().kod.split("-")[1])).filter(n => !isNaN(n));
       const maxCislo = cisla.length ? Math.max(...cisla) : 0;
       return `${prefix}-${(maxCislo + 1).toString().padStart(3, '0')}`;
     }
 
-    document.getElementById("form").onsubmit = function(e) {
+    document.getElementById("form").onsubmit = async function(e) {
       e.preventDefault();
       const kategorie = document.getElementById("kategorie").value;
+      const kod = await generujKod(kategorie);
       const recept = {
-        kod: generujKod(kategorie),
+        kod: kod,
         nazev: document.getElementById("nazev").value,
         kategorie: kategorie,
         alergeny: document.getElementById("alergeny").value,
         ingredience: document.getElementById("ingredience").value.split("\n"),
         postup: document.getElementById("postup").value.split("\n")
       };
-      recepty.push(recept);
-      localStorage.setItem("recepty", JSON.stringify(recepty));
+      await receptyRef.add(recept);
       document.getElementById("form").reset();
       zobrazRecepty();
     };
 
-    function zobrazRecepty() {
+    async function zobrazRecepty() {
       const hledani = document.getElementById("search").value.toLowerCase();
       const filtrKat = document.getElementById("filterKategorie").value;
       const container = document.getElementById("recepty");
       container.innerHTML = "";
-      recepty.filter(r => r.nazev.toLowerCase().includes(hledani) && (filtrKat === "" || r.kategorie === filtrKat)).forEach((r,i)=>{
-        container.innerHTML += `<div class="recept">
-          <span class="code">${r.kod}</span>
-          <h3>${r.nazev}</h3>
-          <p><strong>Kategorie:</strong> ${r.kategorie}</p>
-          <p><strong>Alergeny:</strong> ${r.alergeny}</p>
-          <h4>Ingredience:</h4><ul>${r.ingredience.map(i=>`<li>${i}</li>`).join("")}</ul>
-          <h4>Postup:</h4><ol>${r.postup.map(p=>`<li>${p}</li>`).join("")}</ol>
-          <button onclick="exportPDF('${r.kod}')">PDF</button>
-        </div>`;
+      const snapshot = await receptyRef.get();
+      snapshot.docs.forEach(doc => {
+        const r = doc.data();
+        if (r.nazev.toLowerCase().includes(hledani) && (filtrKat === "" || r.kategorie === filtrKat)) {
+          container.innerHTML += `<div class="recept">
+            <span class="code">${r.kod}</span>
+            <h3>${r.nazev}</h3>
+            <p><strong>Kategorie:</strong> ${r.kategorie}</p>
+            <p><strong>Alergeny:</strong> ${r.alergeny}</p>
+            <h4>Ingredience:</h4><ul>${r.ingredience.map(i=>`<li>${i}</li>`).join("")}</ul>
+            <h4>Postup:</h4><ol>${r.postup.map(p=>`<li>${p}</li>`).join("")}</ol>
+          </div>`;
+        }
       });
     }
 
-    window.onload=zobrazRecepty;
+    window.onload = zobrazRecepty;
   </script>
 </body>
 </html>
